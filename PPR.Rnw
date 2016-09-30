@@ -9,10 +9,19 @@ require(dplyr)
 @ 
 
 <<data, echo=FALSE, results=hide>>=
-ppr <- lapply(X=list.files(pattern="^PPR.*.csv"), read.csv)
-ppr_df <- do.call(rbind, ppr)
-names(ppr_df) <- c("date_sale", "address", "postal_code", "country", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
-ppr_df <-  ppr_df %>% mutate(date_sale=dmy(date_sale), price=as.numeric(gsub(pattern="[^0-9]+", replacement="", x=as.character(price)))/100)
+ppr <- lapply(X=list.files(pattern="^PPR.*.csv"), readr::read_csv)
+ppr_old <- ppr[1:5]
+ppr_new <- ppr[6:7]
+ppr_df_old <- dplyr::bind_rows(ppr_old)
+ppr_df_new <- dplyr::bind_rows(ppr_new)
+names(ppr_df_old) <- c("date_sale", "address", "postal_code", "country", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
+names(ppr_df_new) <- c("date_sale", "address", "postal_code", "country", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
+ppr_df_old2 <-  ppr_df_old %>% mutate(date_sale=dmy(date_sale), price=as.numeric(gsub(pattern="[^0-9]+", replacement="", x=price))/100)
+ppr_df_new
+ppr_df <-  ppr_df %>% mutate(date_sale=dmy(date_sale))
+ppr_df_new <- filter(ppr_df, year(dmy(date_sale))>=2015)
+
+ppr_df_old <- filter(ppr_df, year(date_sale)<2016)
 sales_yearly <- ppr_df %>% mutate(year=year(date_sale)) %>% group_by(year) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
 dub_sales_yearly <- ppr_df %>% filter(country=="Dublin") %>% mutate(year=year(date_sale), month=month(date_sale)) %>% group_by(date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
 county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_sale), county=country) %>% group_by(county, date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
@@ -21,11 +30,10 @@ county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_
 <<plots, echo=FALSE, fig=TRUE>>=
 ggplot(sales_yearly, aes(x=year, y=med_price))+geom_line()
 ggplot(ppr_df, aes(x=year(date_sale), y=price))+geom_bar(stat="identity")+facet_grid(.~year)
-37 matches for "ggplot(" in buffer: *R*
-     25:ggplot(sales_yearly, aes(x=year, y=sales))+geom_line()
-     56:ggplot(sales_yearly, aes(x=year, y=med_price))+geom_line()
-     58:ggplot(sales_yearly, aes(x=year, y=avg_price))+geom_line()
-     59:ggplot(ppr_df, aes(x=year(date_sale), y=price))+geom_bar(stat="identity")+facet_grid(.~year)
+ggplot(sales_yearly, aes(x=year, y=sales))+geom_line()
+ggplot(sales_yearly, aes(x=year, y=med_price))+geom_line()
+ggplot(sales_yearly, aes(x=year, y=avg_price))+geom_line()
+ggplot(ppr_df, aes(x=year(date_sale), y=price))+geom_bar(stat="identity")+facet_grid(.~year)
      ggplot(ppr_df, aes(x=year(date_sale), y=price))+geom_bar(stat="identity")
      ggplot(ppr_df, aes(x=price))+geom_bar(stat="identity")+facet_grid(.~year(date_sale))
      ggplot(ppr_df2, aes(x=price))+geom_bar(stat="identity")+facet_grid(.~year)
