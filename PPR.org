@@ -1,13 +1,19 @@
-#+BEGIN_SRC R
+#+BEGIN_SRC R :session
 require(ggplot2)
 require(reshape2)
 require(lubridate)
 require(dplyr)
 #+END_SRC
 
+#+RESULTS:
+: TRUE
+
 
 #+BEGIN_SRC R :session :results none
-ppr <- lapply(X=list.files(pattern="^PPR.*.csv"), readr::read_csv)
+ireland <- readr::locale(date_names = "en", date_format = "%AD", time_format = "%AT",
+       decimal_mark = ".", grouping_mark = ",", tz = "UTC",
+       encoding = "windows-1252", asciify = FALSE)
+prop <- lapply(X=list.files(pattern="^PPR.*.csv"), function (x) readr::read_csv(x, locale=ireland))
 ppr_old <- ppr[1:5]
 ppr_new <- ppr[6:7]
 ppr_df_old <- dplyr::bind_rows(ppr_old)
