@@ -31,6 +31,8 @@ sales_yearly <- ppr_df %>% mutate(year=year(date_sale)) %>% group_by(year) %>% s
 dub_sales_yearly <- ppr_df %>% filter(county=="Dublin") %>% mutate(year=year(date_sale), month=month(date_sale)) %>% group_by(date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
 county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_sale), county=county) %>% group_by(county, date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
 #+END_SRC
+# so it was much easier when the PPR people added a single file
+# iconv is great, but this is a terrible hack and I should be ashamed
 
 #+BEGIN_SRC R :session :results none
   ggplot(sales_yearly, aes(x=year, y=med_price))+geom_line()
