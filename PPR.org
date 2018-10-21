@@ -69,3 +69,119 @@ county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_
   filter(county_sales_yearly, county!="Dublin" & county!="Cork") %>% ggplot(aes(x=date_sale, y=sales, fill=county,group=county))+geom_bar(stat="identity")
   filter(county_sales_yearly, county!="Dublin" & country!="Cork") %>% ggplot(aes(x=date_sale, y=sales, colour=county,group=county))+geom_smooth()
 #+END_SRC
+* TODO I can join this data with the CSO data, and figure out how much of the stock has changed hand
+
+* TODO Scrape DAFT for more up-to-date information
+
+
+* Models, yo!
+
+- Insprired by regression modelling strategies, I've decided to fit some models to the datasets!
+-
+
+#+BEGIN_SRC R :session :results none :exports none
+ppr_df <- mutate(ppr_df, year=year(date_sale), month=month(date_sale))
+pprlm0 <- lm(price~property_size+county, data=ppr_df)
+pprlm1 <- lm(price~property_size+county+year, data=ppr_df)
+pprlm2 <- lm(price~property_size+county+(year)^2, data=ppr_df2)
+pprlm3 <- lm(price~property_size+county+poly(year, 2), data=ppr_df2)
+ppr_lmer <- lmer(price~property_size+county+(1|year), data=ppr_df2)
+ppr_lmer2 <- lmer(price~property_size+(1|county)+(1|year), data=ppr_df2)
+#+END_SRC
+
+
+- So we start with a simple model (actually Harrell suggests starting with the full model, but whatevs).
+- We look at property size and county
+
+#+BEGIN_SRC R :session :colnames yes
+print(tidy(pprlm0), digits=2)
+#+END_SRC
+
+#+RESULTS:
+| term                                                                                                           |          estimate |        std.error |            statistic |              p.value |
+|----------------------------------------------------------------------------------------------------------------+-------------------+------------------+----------------------+----------------------|
+| (Intercept)                                                                                                    |  246592.355319382 | 22309.8458321105 |     11.0530730321974 | 2.39769414793523e-28 |
+| property_sizegreater than or equal to 125 sq metres                                                            |  45484.9828972044 | 50792.1385409464 |     0.89551226240526 |    0.370520372629761 |
+| property_sizegreater than or equal to 38 sq metres and less than 125 sq metres                                 | -123062.062103286 | 6520.67976383538 |    -18.8725817798637 | 5.40409289837696e-79 |
+| property_sizeless than 38 sq metres                                                                            | -139153.744111224 | 11436.4782227443 |    -12.1675345679828 | 5.54844740849382e-34 |
+| property_sizenï¿½os mï¿½ nï¿½ nï¿½ cothrom le 38 mï¿½adar cearnach agus nï¿½os lï¿½ nï¿½ 125 mï¿½adar cearnach | -34787.1541619935 | 329082.838527376 |   -0.105709414436996 |     0.91581360491836 |
+| property_sizen?os l? n? 38 m?adar cearnach                                                                     | -289268.172060552 | 465176.798332988 |   -0.621845657601962 |    0.534048003414783 |
+| property_sizenos m n n cothrom le 38 madar cearnach agus nos l n 125 madar cearnach                            |  265974.993601415 | 465258.065159164 |    0.571671967707696 |    0.567548436816663 |
+| countyCavan                                                                                                    | -67386.8428078387 |  27604.285212653 |    -2.44117325584473 |   0.0146452685444054 |
+| countyClare                                                                                                    |  3262.58310866583 | 29353.0883591969 |    0.111149568615787 |    0.911498472659221 |
+| countyCork                                                                                                     |  54626.0676435452 | 23152.8454969902 |     2.35936734647352 |    0.018312382727438 |
+| countyDonegal                                                                                                  | -33214.6667027356 | 27107.1112906174 |      -1.225311924485 |    0.220467168050835 |
+| countyDublin                                                                                                   |  157720.816741127 | 22213.0909331943 |     7.10035434579865 | 1.27154981509977e-12 |
+| countyGalway                                                                                                   |  7985.69551670781 |  24920.803876231 |    0.320442934199423 |    0.748634775848122 |
+| countyKerry                                                                                                    | -8585.19234977866 | 27003.2910808002 |   -0.317931333780381 |    0.750539197932665 |
+| countyKildare                                                                                                  |  87432.6510791813 | 23925.4740813581 |     3.65437486345592 | 0.000258241108035178 |
+| countyKilkenny                                                                                                 | -5300.85666387262 | 29915.0538970484 |   -0.177196961841197 |    0.859354857255014 |
+| countyLaois                                                                                                    | -31344.5755090978 | 28857.1080298167 |    -1.08619947212697 |    0.277399325110503 |
+| countyLeitrim                                                                                                  | -63582.0691861116 | 30575.6323540152 |    -2.07950136402533 |   0.0375796156761726 |
+| countyLimerick                                                                                                 |  11956.6327620323 |  27281.317581133 |    0.438271821970254 |     0.66119235010888 |
+| countyLongford                                                                                                 | -67918.3145925299 | 31931.7482307845 |    -2.12698390647624 |   0.0334294134886982 |
+| countyLouth                                                                                                    |  13866.1066051194 | 26756.3724085751 |    0.518235670866782 |    0.604297604523882 |
+| countyMayo                                                                                                     | -30149.8314094527 | 28785.7928332954 |    -1.04738582619755 |    0.294929956251686 |
+| countyMeath                                                                                                    |  54094.1343880218 | 25094.6993133915 |     2.15560002184027 |   0.0311226990743876 |
+| countyMonaghan                                                                                                 | -18903.9355205169 | 32459.1164635881 |   -0.582392177609729 |    0.560306849308809 |
+| countyOffaly                                                                                                   | -36812.6708331868 |  35182.541681191 |    -1.04633346751259 |     0.29541538090585 |
+| countyRoscommon                                                                                                | -71488.1744394423 | 30172.4625315217 |    -2.36931852561777 |   0.0178270807894992 |
+| countySligo                                                                                                    | -5952.51747560606 | 29720.3152512028 |    -0.20028446620751 |    0.841259444367382 |
+| countyTipperary                                                                                                |  -98.013865241359 | 29498.3319672576 | -0.00332269178305241 |    0.997348902109121 |
+| countyWaterford                                                                                                | -4941.33080099257 | 29682.6663385066 |   -0.166471931619643 |    0.867786672469043 |
+| countyWestmeath                                                                                                | -20981.6822689529 | 29174.9622977796 |   -0.719167416732182 |    0.472043276176486 |
+| countyWexford                                                                                                  | -16137.6906658686 | 26265.5594532136 |   -0.614404985152299 |    0.538952319961537 |
+| countyWicklow                                                                                                  |  98911.0592161821 | 26167.0326019108 |     3.77998761727989 | 0.000157134375405939 |
+
+
+- The weird thing here is that property size swaps sign, even though one would expect it to be ordered
+- Might be worth explictly including the ordering to see if that makes a difference
+
+
+#+BEGIN_SRC R :session :colnames yes
+tidy(pprlm1)
+#+END_SRC
+
+#+RESULTS:
+| term                                                                                                           | estimate | std.error | statistic | p.value |
+|----------------------------------------------------------------------------------------------------------------+-------+-------+-------+-------|
+|                                                                                                                |   <5> |   <5> |   <5> |   <5> |
+| (Intercept)                                                                                                    | -13289787.6546072 | 2660321.02838502 | -4.99555787170353 | 5.89893867907463e-07 |
+| property_sizegreater than or equal to 125 sq metres                                                            | 24886.5902747126 | 50932.5733036076 | 0.488618356790346 | 0.625115423512882 |
+| property_sizegreater than or equal to 38 sq metres and less than 125 sq metres                                 | -125284.7124257 | 6532.64346917915 | -19.1782565536891 | 1.69742793436386e-81 |
+| property_sizeless than 38 sq metres                                                                            | -137511.794085593 | 11436.3729581179 | -12.0240739427777 | 3.15687465763404e-33 |
+| property_sizenï¿½os mï¿½ nï¿½ nï¿½ cothrom le 38 mï¿½adar cearnach agus nï¿½os lï¿½ nï¿½ 125 mï¿½adar cearnach | -29886.1193334778 | 328950.200900384 | -0.0908530204622925 | 0.927609975911238 |
+| property_sizen?os l? n? 38 m?adar cearnach                                                                     | -281455.056206578 | 464989.849639389 | -0.605292903543707 | 0.544988894184133 |
+| property_sizenos m n n cothrom le 38 madar cearnach agus nos l n 125 madar cearnach                            | 252866.543182569 | 465075.683033987 | 0.543710523700054 | 0.586644658940625 |
+| countyCavan                                                                                                    | -67179.0813420542 | 27593.0711656676 | -2.43463588879665 | 0.0149124698236477 |
+| countyClare                                                                                                    | 2004.48410587179 | 29342.1734624332 | 0.0683140977418775 | 0.945536049271583 |
+| countyCork                                                                                                     | 51845.5712429473 | 23149.8644716316 | 2.23956262493373 | 0.0251264996356337 |
+| countyDonegal                                                                                                  | -32637.3777569476 | 27096.3070617723 | -1.20449542007858 | 0.228407487031249 |
+| countyDublin                                                                                                   | 154426.243508611 | 22213.4806364698 | 6.95191564239043 | 3.67596980664369e-12 |
+| countyGalway                                                                                                   | 7007.05257171473 | 24911.3951393681 | 0.281279010369086 | 0.778498313919331 |
+| countyKerry                                                                                                    | -10025.5700201416 | 26993.77587048 | -0.371403025210171 | 0.710339949532822 |
+| countyKildare                                                                                                  | 84882.9123093819 | 23920.9771739931 | 3.54847177404052 | 0.000388054775015898 |
+| countyKilkenny                                                                                                 | -5949.72791378275 | 29903.1402761848 | -0.198966658980669 | 0.842290150130267 |
+| countyLaois                                                                                                    | -29729.3147236547 | 28847.1000740413 | -1.03058243800413 | 0.302744837950052 |
+| countyLeitrim                                                                                                  | -65334.657286398 | 30565.1184197908 | -2.13755616415652 | 0.0325607008819415 |
+| countyLimerick                                                                                                 | 11801.898421057 | 27270.2218367664 | 0.432776032835396 | 0.66518054330711 |
+| countyLongford                                                                                                 | -70986.3693287874 | 31924.4355886257 | -2.22357476396792 | 0.0261843560867568 |
+| countyLouth                                                                                                    | 12740.1794016588 | 26746.3888434733 | 0.476332692096028 | 0.633840786425013 |
+| countyMayo                                                                                                     | -32753.1952195762 | 28778.6154750361 | -1.13810878942345 | 0.255083987993329 |
+| countyMeath                                                                                                    | 52751.8610281248 | 25085.8642766795 | 2.10285204632811 | 0.0354868675500598 |
+| countyMonaghan                                                                                                 | -17170.224205544 | 32447.6835467957 | -0.529166409700134 | 0.596693862765596 |
+| countyOffaly                                                                                                   | -35038.6398156055 | 35169.9385992789 | -0.996266732644336 | 0.319128457753417 |
+| countyRoscommon                                                                                                | -71518.9929438411 | 30160.172769431 | -2.37130581083174 | 0.0177315259416125 |
+| countySligo                                                                                                    | -6193.37074175532 | 29708.2467652218 | -0.208473114913184 | 0.834860963151013 |
+| countyTipperary                                                                                                | 1013.39747360199 | 29487.1251530274 | 0.0343674559097513 | 0.972584359193861 |
+| countyWaterford                                                                                                | -5043.75421443332 | 29670.5823082727 | -0.16999175014597 | 0.865017750826684 |
+| countyWestmeath                                                                                                | -17665.9106915961 | 29170.3574550343 | -0.605611731663827 | 0.54477711133572 |
+| countyWexford                                                                                                  | -17301.3594234028 | 26255.8564736729 | -0.658952391850219 | 0.509931309650836 |
+| countyWicklow                                                                                                  | 97691.5071862813 | 26157.4718286658 | 3.73474576695221 | 0.000188246389299767 |
+| year                                                                                                           | 6725.57727003072 | 1321.73934030496 | 5.08842936344693 | 3.63178832886814e-07 |
+#+TBLFM:
+
+
+#+BEGIN_SRC R :session :results output graphics :file coefplot.png :exports results
+
+#+END_SRC
