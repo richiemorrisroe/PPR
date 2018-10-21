@@ -7,9 +7,31 @@ require(dplyr)
 
 #+RESULTS:
 : TRUE
+#+BEGIN_SRC R 
+dat <- read_excel("PPR-ALL.xlsx", sheet="PPR-ALL")
+normalise_names <- function(df) {
+    nms <- names(df)
+    normed <- iconv(tolower(gsub("([[:space:]]|[[:punct:]])+", "_", x=nms)), "latin1", "ASCII", sub="")
+    drop_usc <- gsub("([a-z_])_*$", "\\1", x=normed)
+    names(df) <- drop_usc
+    df
+}
+fix_price <- function(x) {
+    nopunct <- gsub(",|\\.", "", x=x)
+    nums <- iconv(nopunct, "latin1", "ASCII", sub="")
+}
+dat2 <- normalise_names(dat)
+dat2$price <- with(dat2, fix_price(price))
+prop_df <- dat2 %>%
+    mutate(date_of_sale=lubridate::dmy(date_of_sale_dd_mm_yyyy),
+           not_full_market_price=as.factor(not_full_market_price),
+           postal_code=as.factor(fct_explicit_na(postal_code)),
+           vat_exclusive=as.factor(vat_exclusive),
+           county=as.factor(county),
+           price=as.numeric(price)/100)
+#+END_SRC
 
-
-#+BEGIN_SRC R :session :results none
+#+BEGIN_SRC R :session :results none :eval no :exports no
 ireland <- readr::locale(date_names = "en", date_format = "%AD", time_format = "%AT",
        decimal_mark = ".", grouping_mark = ",", tz = "UTC",
        encoding = "windows-1252", asciify = FALSE)
@@ -75,6 +97,7 @@ county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_
   filter(county_sales_yearly, county!="Dublin" & county!="Cork") %>% ggplot(aes(x=date_sale, y=sales, fill=county,group=county))+geom_bar(stat="identity")
   filter(county_sales_yearly, county!="Dublin" & country!="Cork") %>% ggplot(aes(x=date_sale, y=sales, colour=county,group=county))+geom_smooth()
 #+END_SRC
+
 * TODO I can join this data with the CSO data, and figure out how much of the stock has changed hand
 
 * TODO Scrape DAFT for more up-to-date information
@@ -191,3 +214,59 @@ tidy(pprlm1)
 #+BEGIN_SRC R :session :results output graphics :file coefplot.png :exports results
 
 #+END_SRC
+
+* Article
+
+#+BEGIN_SRC R :session :results output graphics :file county1.png
+ggplot(prop_df, aes(x=date_of_sale, y=price))+facet_wrap(~county)+geom_line()
+#+END_SRC
+
+#+RESULTS:
+[[file:county1.png]]
+- Nothing except Dublin matters. 
+
+#+BEGIN_SRC R :session :results output graphics :file county2.png
+ggplot(prop_df, aes(x=date_of_sale, y=log(price, 10)))+facet_wrap(~county)+geom_line()
+#+END_SRC
+
+- the log brings out some kinda trend
+
+#+BEGIN_SRC R :session :results output graphics :file county3.png
+ggplot(prop_df, aes(x=date_of_sale, y=log(price, 10)))+facet_wrap(~county)+geom_line()+geom_smooth(method="lm")
+#+END_SRC
+
+- but it's super noisy
+- we have whole developments being sold also
+- they should probably be removed from the data
+
+#+BEGIN_SRC R :session :results output graphics :file dublin1.png
+filter(prop_df, county=="Dublin") %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)
+#+END_SRC
+
+#+RESULTS:
+[[file:dublin1.png]]
+#+BEGIN_SRC R :session :results output graphics :file dublin2.png
+filter(prop_df, county=="Dublin", postal_code=="Dublin 7") %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+[[file:dublin2.png]]
+
+#+BEGIN_SRC R :session :results output graphics :file dublin3.png
+filter(prop_df, county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description)) %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+[[file:dublin3.png]]
+#+BEGIN_SRC R :session :results output graphics :file dublin5.png
+filter(prop_df, county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description), price<2e6) %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+[[file:dublin5.png]]
+#+BEGIN_SRC R :session :results output graphics :file dublin6.png
+mutate(prop_df, month=month(date_of_sale, label=TRUE), year=year(date_of_sale)) %>% filter( county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description), price<2e6) %>% ggplot(aes(x=date_of_, y=price))+geom_point()+facet_wrap(~month)+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+[[file:dublin6.png]]
