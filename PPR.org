@@ -14,18 +14,22 @@ ireland <- readr::locale(date_names = "en", date_format = "%AD", time_format = "
        decimal_mark = ".", grouping_mark = ",", tz = "UTC",
        encoding = "windows-1252", asciify = FALSE)
 prop <- lapply(X=list.files(pattern="^PPR.*.csv"), function (x) readr::read_csv(x, locale=ireland))
-ppr_old <- ppr[1:5]
-ppr_new <- ppr[6:7]
-ppr_df_old <- dplyr::bind_rows(ppr_old)
-ppr_df_new <- dplyr::bind_rows(ppr_new)
-names(ppr_df_old) <- c("date_sale", "address", "postal_code", "country", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
-names(ppr_df_new) <- c("date_sale", "address", "postal_code", "country", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
-ppr_df_old2 <-  ppr_df_old %>% mutate(date_sale=dmy(date_sale), price=as.numeric(gsub(pattern="[^0-9]+", replacement="", x=price))/100)
-ppr_df_new2 <- ppr_df_new %>% mutate(date_sale=dmy(date_sale))
-ppr_df <-  bind_rows(ppr_df_old2, ppr_df_new2)
+propdf <- dplyr::bind_rows(prop)
+names(propdf) <- c("date_sale", "address", "postal_code", "county", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
+propdf2 <- propdf[,1:7]
+prop_non_num <- prop[c(1:5,8)] %>% bind_rows()
+names(prop_non_num) <- c("date_sale", "address", "postal_code", "county", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
+prop_ok_num <- prop[c(6:7)] %>% bind_rows()
+names(prop_ok_num) <- c("date_sale", "address", "postal_code", "county", "price", "not_full_market_price", "vat_exclusive", "description", "property_size")
+prop_ok_num <-  mutate(prop_ok_num, date_sale=dmy(date_sale))
+
+ppr_df_nonnum <-  prop_non_num %>% mutate(date_sale=dmy(date_sale), price2=as.numeric(gsub(pattern="[^0-9]+", replacement="", x=price))/100)
+
+ppr_df_nonnum2 <-  select(ppr_df_nonnum, 1:8, price=price2)
+ppr_df <-  bind_rows(ppr_df_nonnum2, prop_ok_num)
 sales_yearly <- ppr_df %>% mutate(year=year(date_sale)) %>% group_by(year) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
-dub_sales_yearly <- ppr_df %>% filter(country=="Dublin") %>% mutate(year=year(date_sale), month=month(date_sale)) %>% group_by(date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
-county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_sale), county=country) %>% group_by(county, date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
+dub_sales_yearly <- ppr_df %>% filter(county=="Dublin") %>% mutate(year=year(date_sale), month=month(date_sale)) %>% group_by(date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
+county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_sale), county=county) %>% group_by(county, date_sale) %>% summarise(sales=length(address), med_price=median(price), avg_price=mean(price, na.rm=TRUE))
 #+END_SRC
 
 #+BEGIN_SRC R :session :results none
