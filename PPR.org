@@ -1,4 +1,7 @@
 #+PROPERTY: header-args: :exports code :eval no
+#+PROPERTY: header-args:R :session *R*
+
+* Data Munging :noexport:
 #+BEGIN_SRC R :session
 require(ggplot2)
 require(reshape2)
@@ -35,6 +38,8 @@ prop_df <- dat2 %>%
 prop_df2 <- mutate(prop_df, year=lubridate::year(date_of_sale), month=lubridate::month(date_of_sale), day=lubridate::day(date_of_sale))
 train <- filter(prop_df2, year<=2013)
 train_sample <- sample_frac(train, size=0.1)
+train_sample2 <- (filter(train_sample, price<1e6))
+select(train_sample2, 1, address, county) %>% write_csv("train_sample2.csv", na="")
 #+END_SRC
 
 #+BEGIN_SRC R :session :results none :eval no :exports code
@@ -276,107 +281,364 @@ tidy(pprlm1)
 
 * Article
 
-#+BEGIN_SRC R :session :results output graphics :file county1.png :exports results
+** sratchwork :noexport:
+ #+BEGIN_SRC R :session :results output graphics :file county1.png :exports results
 ggplot(prop_df, aes(x=date_of_sale, y=price))+facet_wrap(~county)+geom_line()
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:county1.png]]
-- Nothing except Dublin matters. 
+ #+RESULTS:
+ [[file:county1.png]]
+ - Nothing except Dublin matters. 
 
-#+BEGIN_SRC R :session :results output graphics :file county2.png :exports results
+ #+BEGIN_SRC R :session :results output graphics :file county2.png :exports results
 ggplot(prop_df, aes(x=date_of_sale, y=log(price, 10)))+facet_wrap(~county)+geom_line()
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:county2.png]]
+ #+RESULTS:
+ [[file:county2.png]]
 
-- the log brings out some kinda trend
+ - the log brings out some kinda trend
 
-#+BEGIN_SRC R :session :results output graphics :file county3.png :exports results
+ #+BEGIN_SRC R :session :results output graphics :file county3.png :exports results
 ggplot(prop_df, aes(x=date_of_sale, y=log(price, 10)))+facet_wrap(~county)+geom_line()+geom_smooth(method="lm")
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:county3.png]]
+ #+RESULTS:
+ [[file:county3.png]]
 
-- but it's super noisy
-- we have whole developments being sold also
-- they should probably be removed from the data
+ - but it's super noisy
+ - we have whole developments being sold also
+ - they should probably be removed from the data
 
-#+BEGIN_SRC R :session :results output graphics :file dublin1.png :exports results
+ #+BEGIN_SRC R :session :results output graphics :file dublin1.png :exports results
 filter(prop_df, county=="Dublin") %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:dublin1.png]]
-#+BEGIN_SRC R :session :results output graphics :file dublin2.png :exports results
+ #+RESULTS:
+ [[file:dublin1.png]]
+ #+BEGIN_SRC R :session :results output graphics :file dublin2.png :exports results
 filter(prop_df, county=="Dublin", postal_code=="Dublin 7") %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:dublin2.png]]
+ #+RESULTS:
+ [[file:dublin2.png]]
 
-#+BEGIN_SRC R :session :results output graphics :file dublin3.png :exports results
+ #+BEGIN_SRC R :session :results output graphics :file dublin3.png :exports results
 filter(prop_df, county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description)) %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:dublin3.png]]
-#+BEGIN_SRC R :session :results output graphics :file dublin5.png :exports results
+ #+RESULTS:
+ [[file:dublin3.png]]
+ #+BEGIN_SRC R :session :results output graphics :file dublin5.png :exports results
 filter(prop_df, county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description), price<2e6) %>% ggplot(aes(x=date_of_sale, y=price))+geom_line()+facet_wrap(~postal_code)+scale_y_continuous(labels=scales::dollar)
-#+END_SRC
+ #+END_SRC
 
-#+RESULTS:
-[[file:dublin5.png]]
-#+BEGIN_SRC R :session :results output graphics :file dublin6.png :exports results
+ #+RESULTS:
+ [[file:dublin5.png]]
+ #+BEGIN_SRC R :session :results output graphics :file dublin6.png :exports results
 mutate(prop_df, month=month(date_of_sale, label=TRUE), year=year(date_of_sale)) %>% filter( county=="Dublin", postal_code=="Dublin 7", is.na(property_size_description), price<2e6) %>% ggplot(aes(x=date_of_, y=price))+geom_point()+facet_wrap(~month)+scale_y_continuous(labels=scales::dollar)
+ #+END_SRC
+
+ #+RESULTS:
+ [[file:dublin6.png]]
+
+
+
+** First Article
+#+BEGIN_QUOTE
+It is a truth universally acknowledged that a man in possession of a good fortune must be in want of a house. 
+#+END_QUOTE
+
+I've taken the libery of updating good old Jane's statement for more contemporary times. This article
+talks about my process of looking at and understanding property prices in Ireland.
+
+Some background for my non-Irish readers:
+- Ireland was mostly poor from the 1930's to the 1990's
+- Banks were very hesitant to lend money to anyone
+- And the interest rates were very high
+
+This all changed during the Celtic Tiger period, when a flood of cheap
+euro-denominated money was dropped in by German and french
+helicopters [fn:1]. This lead (predictably) to a massive property
+bubble, which was sadly interrupted by the advent of financial
+contagion in 2007. Over the next few years, the economy fell apart, we
+were dragged into a bailout program, and house prices collapsed.
+
+A few years after that, they started to recover, and right now, we
+have a massive housing crisis in that people can't afford houses,
+which puts more stress on the rental market, increasing prices.
+
+Given that I don't trust the property-porn engaged in by the media and
+government, I decided to take matters into my own hands, and consult
+the property price register (PPR for future reference) and figure out
+whether or not I should buy or continue to slum it in a hell of
+short-term lets and fear [fn:2].
+
+*** Property Price Register
+
+So, the property price register was established in the depths of the
+economic crisis [fn:3], and so has a number of problems. The most
+obvious is that we only have data from 2010. Given data from the boom,
+it would be a much easier task to estimate tops and bottoms, but we
+can only work with what we have. The second problem with the data is
+that Ireland doesn't have postcodes [fn:4], which makes localisation
+of the properties a challenge.
+
+Nonetheless, the nice people at the [[https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/page/ppr-home-en][PPR]] have collated the data for us,
+so there is that. They helpfully provide the data in CSV format, and
+have a document which contains all of the property data, which can be
+found [[https://propertypriceregister.ie/website/npsra/pprweb.nsf/PPRDownloads?OpenForm][here]] [fn:5]
+
+
+So, on with the show! [fn:6]
+
+*** Data Cleaning
+
+In data analysis, much as in life, cleaning is important.
+Unfortunately, while keeping ones house and body cleaning rarely takes
+up all of one's time, data cleaning, can and does take up almost all
+of the time. So, enjoying (or at least not hating) this process,
+is an important career skill.
+
+Anyways, so the first thing we do is look at the data
+
+#+BEGIN_SRC R :session *R* :exports both
+dat <- read_excel("PPR-ALL.xlsx", sheet="PPR-ALL")
+names(dat)
 #+END_SRC
 
 #+RESULTS:
-[[file:dublin6.png]]
+| Date of Sale (dd/mm/yyyy) |
+| Address                   |
+| Postal Code               |
+| County                    |
+| Price (�)                 |
+| Not Full Market Price     |
+| VAT Exclusive             |
+| Description of Property   |
+| Property Size Description |
 
-** Geocoding
+OK, so we have date (nicely, they have specified the format), address, postal code, county
+Note that price has a weirdass character in there. This is probably because I don't really
+understand how encodings work, anyways. 
 
-- Gonna do this in Python
-- writing this while my stan code compiles :) 
+I have some problems with these names. The spaces will cause problems, and capitalisation is so passe.
+I'll fix these problems with some code. 
 
-#+BEGIN_SRC python :session :tangle geocode.py :exports code
-import requests as r
-import time
-import pandas as pd
-import json
-
-addresses = pd.read_csv("PPR-addresses.csv")
-add_filled = addresses2.fillna("")
-add = addresses.Address
-add2 = [x.lower() for x in add]
-add3 = add2[0:10]
-add4 = [x + ",ireland" for x in add3]
-add_test = addresses.head()
-geocode_results = []
-failures = []
-for i, location in addresses.iterrows():
-    lloc = list(location)
-    date, add1, add2, add3 = lloc
-    locstr = f"{add1},{add2},{add3},ireland"
-    print(locstr)
-    geocodestr = "https://geocode.xyz/?locate={locstr}&region=IE&geoit=json"
-    req = r.get(geocodestr.format(locstr=locstr))
-    time.sleep(1)
-    print(i)
-    if req.status_code == 200:
-        myjson = json.loads(req.content)
-        print(myjson)
-        geocode_results.append(myjson)
-    else:
-        failures.append(location)
-
-    if i % 100==0:
-        gc_df = pd.DataFrame(geocode_results)
-        gc_df.to_csv("gc_results.csv")
-
-
-    
-
+#+BEGIN_SRC R :session :exports code
+normalise_names <- function(df) {
+    nms <- names(df)
+    normed <- iconv(tolower(gsub("([[:space:]]|[[:punct:]])+", "_", x=nms)), "latin1", "ASCII", sub="")
+    drop_usc <- gsub("([a-z_])_*$", "\\1", x=normed)
+    names(df) <- drop_usc
+    df
+}
 #+END_SRC
+
+
+This function does a few things:
+1) it replaces spaces or punctuation with underscores
+2) it then converts all text to lowercase
+3) Then we exert cultural imperialism and export to ascii
+4) finally, we replace multiple underscores with one
+
+#+BEGIN_SRC R :session :exports both 
+dat2 <- normalise_names(dat)
+names(dat2)
+#+END_SRC
+
+#+RESULTS:
+| date_of_sale_dd_mm_yyyy   |
+| address                   |
+| postal_code               |
+| county                    |
+| price                     |
+| not_full_market_price     |
+| vat_exclusive             |
+| description_of_property   |
+| property_size_description |
+
+much better. Little things like this add up to a better, more productive life. 
+
+Next, we need to remove the Euro symbols from the input doc (which have become hopelessly mangled). 
+Again, we abuse iconv, this time on a particular column. 
+My life would be much easier if I took the time to learn how to handle encodings [fn:7]
+
+#+BEGIN_SRC R :session *R* :exports code
+fix_price <- function(x) {
+    nopunct <- gsub(",|\\.", "", x=x)
+    nums <- iconv(nopunct, "latin1", "ASCII", sub="")
+}
+dat2$price <- with(dat2, fix_price(price))
+#+END_SRC
+
+#+RESULTS:
+: TRUE
+
+
+- For some bizzare reason, price is in cent. We handle that here to avoid wasting time. 
+- These preliminaries accomplished, we can move towards actually looking at the data
+
+#+BEGIN_SRC R :session :exports code :results none
+
+prop_df <- dat2 %>%
+    mutate(date_of_sale=lubridate::dmy(date_of_sale_dd_mm_yyyy),
+           not_full_market_price=as.factor(not_full_market_price),
+           postal_code=as.factor(fct_explicit_na(postal_code)),
+           vat_exclusive=as.factor(vat_exclusive),
+           county=as.factor(county),
+           price=as.numeric(price)/100)
+prop_df2 <- mutate(prop_df,
+                   year=lubridate::year(date_of_sale),
+                   month=lubridate::month(date_of_sale),
+                   day=lubridate::day(date_of_sale))
+
+prop_sample <- sample_frac(prop_df2, size=0.1)
+#+END_SRC
+
+- We also take a ten percent sample, just to speed up the analysis [fn:8]
+
+#+RESULTS:
+
+*** Wasting Time with Plots
+
+#+BEGIN_SRC R :session :results output graphics
+ggplot(prop_df, aes(x=price))+geom_density()
+#+END_SRC
+
+- So, when we do the simplest plot ever (a one-way summary of price), it looks pretty weird. 
+- Most of the density is in the one line near zero, and there's a long tail that goes up to 100mn
+- who are these people buying houses for many millions of euros?
+- most importantly, how can I become one of them? 
+
+The first thing to do when you find something weird like this is to take a look at the observations
+and see if they are different [fn:9]. Let's sort the data by price and look at the addresses. 
+
+#+BEGIN_SRC R :session :colnames yes :exports both
+arrange(prop_df, desc(price)) %>%
+    select(address, county, date_of_sale, price) %>%
+    head()
+#+END_SRC
+
+#+RESULTS:
+| address                                       | county | date_of_sale |     price |
+|-----------------------------------------------+--------+--------------+-----------|
+| 2 CANNON HOUSE, CLANCY QUAY, DUBLIN 8         | Dublin |   2018-06-22 | 139165000 |
+| APT 204 THE ALLIANCE, THE GASWORKS, BARROW ST | Dublin |   2018-06-22 |  87928183 |
+| Block F  K and L Central Park, Leopardstown   | Dublin |   2014-07-24 |  86365000 |
+| Blocks F  K and L Central Park, Leopardstown  | Dublin |   2014-03-28 |  70503358 |
+| 182 THE ELYSIAN, EGLINTON STREET, CORK        | Cork   |   2018-07-27 |  69873482 |
+| Binary Hub  Roe's Lane, Bonham Street         | Dublin |   2016-12-19 |  69208163 |
+
+OK, so the Cannon house thing must be more than one apartment. Otherwise things have gone even
+madder than I thought. Also Apt 204 the Alliance, and 182 the Elysian [fn:10]. Entire 
+apartment blocks for 76-86 million makes more sense, however.
+
+#+BEGIN_SRC R :session :colnames yes :exports both
+arrange(prop_df, desc(price)) %>%
+    select(address, county, date_of_sale, price) %>%
+    tail()
+#+END_SRC
+
+#+RESULTS:
+| address                                  | county    | date_of_sale | price |
+|------------------------------------------+-----------+--------------+-------|
+| 7 Greenfields, Lanesboro Road, Roscommon | Roscommon |   2015-05-22 |  5179 |
+| 8 Greenfields, Lanesboro Road, Roscommon | Roscommon |   2015-05-22 |  5179 |
+| 9 Greenfields, Lanesboro Road, Roscommon | Roscommon |   2015-05-22 |  5179 |
+| LAVALLY, BALLINTOGHER                    | Sligo     |   2014-05-01 |  5177 |
+| Loghnabradden, Fintown, Co. Donegal      | Donegal   |   2012-01-11 |  5079 |
+| CLOGHAN, GLENCOLMCILLE, DONEGAL          | Donegal   |   2014-07-18 |  5079 |
+
+
+- there must be something really wrong with these houses.
+
+It does tell us something about the tails[fn:11] of the crash, in that
+property was worth so little in Roscommon in 2015 that this happened.
+It may also be an error, as I don't know what kind of checking goes into 
+this data. 
+
+#+BEGIN_SRC R :session :results output graphics :file yearly.png
+year2 <- prop_df2 %>% group_by(year) %>% summarise(count=n())
+ggplot(year2, aes(x=year, y=count))+geom_line()
+#+END_SRC
+
+#+RESULTS:
+[[file:yearly.png]]
+- Note that 2018 hasn't finished yet, which distorts the trend.
+
+However, it's interesting to note that there weren't that many sales.
+Even at 55k it's only 5% of the housing stock [fn:12]. That's not a huge amount,
+but given the lack of data for the boom, it's very difficult to make those judgements. 
+
+#+BEGIN_SRC R :session :results output graphics :file yearly.png
+countyear <- prop_df2 %>%
+    filter(price<2e6)  %>%
+    group_by(year, county) %>%
+    summarise(count=n(),
+              med=median(price),
+              mean=mean(price))
+ggplot(countyear, aes(x=year, y=med, colour=county))+geom_line()+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+
+[[file:yearly.png]]
+
+So the overall trend is pretty clear. The chart above shows median prices.
+For those of you who aren't stats nerds, the median is the middle value.
+If you laid out all the prices in a line, the median would be the middle of 
+the line. This means that it's a reasonable summary of the distribution. 
+
+Really, you should look at the distribution itself, but aggregations
+such as the median are useful for plots and telling people about. 
+
+
+#+BEGIN_SRC R :session :results output graphics :file meanyearly.png
+ggplot(countyear, aes(x=year, y=mean, colour=county))+geom_line()+scale_y_continuous(labels=scales::dollar)
+#+END_SRC
+
+#+RESULTS:
+[[file:meanyearly.png]]
+- The mean, which is the sum divided by the length of the set of numbers is much higher.
+This is pretty normal in most sets of data because huge values at the top or bottom
+have more impact on the mean. Again, the same trend is pretty visible.
+
+Note that I've filtered out the properties sold for more than 2mn, as these are mostly apartment
+blocks and groups of houses. These probably shouldn't be looked at for this analysis [fn:13]. 
+
+
+
+* Footnotes
+
+[fn:13] yes, this is really subjective, like almost everything in data
+analysis. The advantage here is that I provide code so people can
+change that however they want
+
+[fn:12] assuming 1mn households. I should probably check this with the
+CSO
+
+[fn:11] geddit?
+
+[fn:10] that dude finally made his money back, after opening really
+expensive apartments just as the crash hit
+
+[fn:9] or you could just log it and get one with building a CNN I
+guess
+
+[fn:8] turns out sampling is pretty cool, who knew? 
+
+[fn:7] look at how well I'm resisting distraction!
+
+[fn:6] for very nerdy, boring values of show
+
+[fn:5] they also provide commercial data (which I just noticed), but I am resisting the urge to become distracted
+
+[fn:4] we do now, but they are not on any of the addresses
+
+[fn:3] by the Greens actually, so at least I don't feel my vote for them was *entirely* wasted
+
+[fn:2] actually I've been in the same house for many years, but I likes a good simile. 
+
+[fn:1] In fact, it was done via banks, but it doesn't really have the same ring to it now, does it? 
+
