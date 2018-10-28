@@ -104,17 +104,70 @@ county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_
   filter(county_sales_yearly, county!="Dublin" & country!="Cork") %>% ggplot(aes(x=date_sale, y=sales, colour=county,group=county))+geom_smooth()
 #+END_SRC
 
-* TODO I can join this data with the CSO data, and figure out how much of the stock has changed hand
+** TODO I can join this data with the CSO data, and figure out how much of the stock has changed hand
 
-* TODO Scrape DAFT for more up-to-date information
+** TODO Scrape DAFT for more up-to-date information
+** Geocoding
+
+- Gonna do this in Python
+- writing this while my stan code compiles :) 
+
+#+BEGIN_SRC python :session :tangle geocode.py :exports code
+import requests as r
+import time
+import pandas as pd
+import json
+import random
+addresses = pd.read_csv("train_sample2.csv")
+add_filled = addresses.fillna("")
+add_filled.address = addresses.address.apply(lambda x: x.lower())
+add = addresses.address
+add2 = [x.lower() for x in add]
+add3 = add2[0:10]
+add4 = [x + ",ireland" for x in add3]
+add_test = addresses.head()
+geocode_results = []
+failures = []
+fail_content = []
+for i, location in add_filled.iterrows():
+    lloc = list(location)
+    date, add1, add2 = lloc
+    locstr = f"{add1},{add2},ireland"
+    print(locstr)
+    geocodestr = "https://geocode.xyz/?auth=623294118775338849269x1104&locate={locstr}&region=IE&geoit=json"
+    req = r.get(geocodestr.format(locstr=locstr))
+    sleeptime = random.randint(1, 10) % 10
+    print(f"sleeping for {sleeptime} seconds")
+    time.sleep(sleeptime)
+
+    print(i)
+    if req.status_code == 200:
+        myjson = json.loads(req.content)
+        print(myjson)
+        geocode_results.append(myjson)
+    else:
+        failures.append(location)
+        fail_content.append(json.loads(req.content))
+        print(req.content)
+    if i % 100==0:
+        gc_df = pd.DataFrame(geocode_results)
+        gc_df.to_csv("gc_results.csv")
 
 
-* Models, yo!
+    
+
+#+END_SRC
+
+- Damnit, requests throttled!
+- i may need to pay them some money, unfortunately. 
+
+
+* Models, yo! :noexport:
 
 - Insprired by regression modelling strategies, I've decided to fit some models to the datasets!
 -
 
-#+BEGIN_SRC R :session :results none :exports code
+#+BEGIN_SRC R :session :results none :exports code :eval no
 ppr_df <- mutate(ppr_df, year=year(date_sale), month=month(date_sale))
 pprlm0 <- lm(price~property_size+county, data=ppr_df)
 pprlm1 <- lm(price~property_size+county+year, data=ppr_df)
