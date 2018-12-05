@@ -1,6 +1,10 @@
+#+TITLE: Property Analysis
+#+HTML_HEAD: <style type="text/css">.example {background-color: #eff0f1; color: #ff0000;}</style>
+#+OPTIONS: toc:nil
+#+OPTIONS: ^:nil
 #+SETUPFILE: ~/Dropbox/org-minimal-html-theme/org-minimal-theme.setup
 #+PROPERTY: header-args: :exports code :eval no
-#+PROPERTY: header-args:R :session *R*
+#+PROPERTY: header-args:R :session *R* :eval no-export
 
 * Data Munging :noexport:
 #+BEGIN_SRC elisp :results none
@@ -334,7 +338,7 @@ tidy(pprlm1)
 
 
 
-* Article
+* Article :noexport:
 
 
 ** DONE Clean up XL file before import :noexport:
