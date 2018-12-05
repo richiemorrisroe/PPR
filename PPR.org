@@ -125,7 +125,7 @@ county_sales_yearly <- ppr_df %>% mutate(year=year(date_sale), month=month(date_
 - Gonna do this in Python
 - writing this while my stan code compiles :) 
 
-#+BEGIN_SRC python :session :tangle geocode.py :exports code
+#+BEGIN_SRC python :session :tangle geocode.py :exports code :eval no
 import requests as r
 import time
 import pandas as pd
@@ -174,6 +174,53 @@ for i, location in add_filled.iterrows():
 - Damnit, requests throttled!
 - i may need to pay them some money, unfortunately. 
 
+After paying some money, I got a sample of geocoded houses. 
+
+#+BEGIN_SRC python :session :results none :eval no
+import pandas as pd
+gc_res = pd.read_csv("gc_results.csv")
+print(gc_res.shape)
+res_good =  gc_res[gc_res.error.isnull()]
+print(res_good.shape)
+#+END_SRC
+*** Grabbing someone else's work
+
+- Shane Lynn did this before.
+
+- We can read in his data and get a big head start
+
+- only covers 2012-17
+
+- but has latitude and longitude, and shapefiles, which will help a lot. 
+
+#+BEGIN_SRC R :results none :exports code :eval no
+require(sp)
+require(rgdal)
+require(tidyverse)
+ppr_gc <- read_csv("ppr_data_encoded.csv")
+ppr_gc_smaller <- select(ppr_gc, year, input_string, sale_date, price, ppr_county, geo_county, description_of_property, 15:24) %>% filter(price<1e6)
+ppr_gc2 <- filter(ppr_gc_smaller, !is.na(latitude), !is.na(electoral_district))
+locs <- select(ppr_gc2, longitude, latitude)
+sp_ppr <- SpatialPointsDataFrame(locs, data=ppr_gc2, proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+shp <- readOGR("electoral_divisions_gps.shp")
+dublin_counties <- c("Fingal", "Dn Laoghaire-Rathdown", "Dublin City", 
+                     "South Dublin", "Kildare County", "Wicklow County")
+subset <- shp[as.character(shp@data$COUNTYNAME) %in% 
+                dublin_counties, ]
+mapdata <- fortify(subset)
+
+dubcity <- filter(ppr_gc2, geo_county %in% dublin_counties)
+dubcity_samp <- sample_frac(dubcity, size=0.3)
+
+
+#+END_SRC
+
+#+BEGIN_SRC R :exports code :eval no
+stan_elec_dub <- stan_lmer(log(price)~region+
+                               (postcode|year)+
+                               (elec_dist|postcode),
+                           data=dubcity_samp2)
+#+END_SRC
 
 * Models, yo! :noexport:
 
