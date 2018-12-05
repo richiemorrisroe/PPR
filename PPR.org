@@ -237,8 +237,11 @@ ppr_lmer <- lmer(price~property_size+county+(1|year), data=ppr_df2)
 ppr_lmer2 <- lmer(price~property_size+(1|county)+(1|year), data=ppr_df2)
 #+END_SRC
 
-
-- So we start with a simple model (actually Harrell suggests starting with the full model, but whatevs).
+#+BEGIN_SRC R :session :results none :exports none
+save_model <- function(x) saveRDS(x, paste(substitute(x), ".rds", sep=""))
+#+END_SRC
+- So we start with a simple model (actually Harrell suggests starting
+  with the full model, but whatevs).
 - We look at property size and county
 
 #+BEGIN_SRC R :session :colnames yes :eval no
