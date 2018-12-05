@@ -409,13 +409,15 @@ mutate(prop_df, month=month(date_of_sale, label=TRUE), year=year(date_of_sale)) 
 
 
 
-** First Article
+* First Article
 #+BEGIN_QUOTE
-It is a truth universally acknowledged that a married man in possession of a good fortune must be in want of a house. 
+It is a truth universally acknowledged that a married man in
+possession of a good fortune must be in want of a house.
 #+END_QUOTE
 
-I've taken the libery of updating good old Jane's statement for more contemporary times. This article
-talks about my process of looking at and understanding property prices in Ireland.
+I've taken the liberty of updating good old Jane's statement for more
+contemporary times. This article talks about my process of looking at
+and understanding property prices in Ireland.
 
 Some background for my non-Irish readers:
 - Ireland was mostly poor from the 1930's to the 1990's
@@ -439,7 +441,7 @@ the property price register (PPR for future reference) and figure out
 whether or not I should buy or continue to slum it in a hell of
 short-term lets and fear [fn:2].
 
-*** Property Price Register
+** Property Price Register
 
 So, the property price register was established in the depths of the
 economic crisis [fn:3], and so has a number of problems. The most
@@ -483,18 +485,27 @@ names(dat)
 | Description of Property   |
 | Property Size Description |
 
-OK, so we have date (nicely, they have specified the format), address, postal code, county
-Note that price has a weirdass character in there. This is probably because I don't really
-understand how encodings work, anyways. 
+OK, so we have date (nicely, they have specified the format),
+address, postal code, county.
 
-I have some problems with these names. The spaces will cause problems, and capitalisation is so passe.
-I'll fix these problems with some code. 
+Note that price has a weirdass character
+in there. This is probably because I don't really understand how
+encodings work [fn:21].
+
+I have some problems with these names. The spaces will cause problems,
+and capitalisation is so passe. I'll fix these problems with some
+code.
 
 #+BEGIN_SRC R :session :exports code
 normalise_names <- function(df) {
     nms <- names(df)
-    normed <- iconv(tolower(gsub("([[:space:]]|[[:punct:]])+", "_", x=nms)), "latin1", "ASCII", sub="")
-    drop_usc <- gsub("([a-z_])_*$", "\\1", x=normed)
+    normed <- iconv(
+        tolower(
+            gsub("([[:space:]]|[[:punct:]])+", "_",
+                 x=nms)),
+        "latin1", "ASCII", sub="")
+    drop_usc <- gsub("([a-z_])_*$", "\\1",
+                     x=normed)
     names(df) <- drop_usc
     df
 }
@@ -502,10 +513,10 @@ normalise_names <- function(df) {
 
 
 This function does a few things:
-1) it replaces spaces or punctuation with underscores
-2) it then converts all text to lowercase
-3) Then we exert cultural imperialism and export to ascii
-4) finally, we replace multiple underscores with one
+1) it replaces spaces or punctuation with underscores[fn:22]
+2) it then converts all text to lowercase 
+3) Then we exert cultural imperialism and export to ascii[fn:24]
+4) finally, we replace multiple underscores with one (for tidyness, mostly)
 
 #+BEGIN_SRC R :session :exports both 
 dat2 <- normalise_names(dat)
@@ -523,11 +534,13 @@ names(dat2)
 | description_of_property   |
 | property_size_description |
 
-much better. Little things like this add up to a better, more productive life. 
+Much better. Little things like this add up to a better, more
+productive life.
 
-Next, we need to remove the Euro symbols from the input doc (which have become hopelessly mangled). 
-Again, we abuse iconv, this time on a particular column. 
-My life would be much easier if I took the time to learn how to handle encodings [fn:7]
+Next, we need to remove the Euro symbols from the input doc (which
+have become hopelessly mangled). Again, we abuse iconv, this time on
+a particular column. My life would be much easier if I took the time
+to learn how to handle encodings [fn:7]
 
 #+BEGIN_SRC R :session *R* :exports code
 fix_price <- function(x) {
@@ -574,13 +587,16 @@ ggplot(prop_df, aes(x=price))+geom_density()
 #+RESULTS:
 [[file:pricedens.png]]
 
-- So, when we do the simplest plot ever (a one-way summary of price), it looks pretty weird. 
-- Most of the density is in the one line near zero, and there's a long tail that goes up to 100mn
+- So, when we do the simplest plot ever (a one-way summary of price),
+  it looks pretty weird.
+- Most of the density is in the one line near zero, and there's a
+  long tail that goes up to 100mn
 - who are these people buying houses for many millions of euros?
 - most importantly, how can I become one of them? 
 
-The first thing to do when you find something weird like this is to take a look at the observations
-and see if they are different [fn:9]. Let's sort the data by price and look at the addresses. 
+The first thing to do when you find something weird like this is to
+take a look at the observations and see if they are different [fn:9].
+Let's sort the data by price and look at the addresses.
 
 #+BEGIN_SRC R :session :colnames yes :exports both
 arrange(prop_df, desc(price)) %>%
@@ -646,10 +662,13 @@ countyear <- prop_df2 %>%
     summarise(count=n(),
               med=median(price),
               mean=mean(price))
-ggplot(countyear, aes(x=year, y=med, colour=county))+geom_line()+scale_y_continuous(labels=scales::dollar)
+ggplot(countyear, aes(x=year, y=med, colour=county))+
+    geom_line()+
+    scale_y_continuous(labels=scales::dollar_format(prefix="€" ))
 #+END_SRC
 
 #+RESULTS:
+[[file:yearly.png]]
 
 [[file:yearly.png]]
 
@@ -663,7 +682,7 @@ such as the median are useful for plots and telling people about.
 
 
 #+BEGIN_SRC R :session :results output graphics :file meanyearly.png :exports results
-ggplot(countyear, aes(x=year, y=mean, colour=county))+geom_line()+scale_y_continuous(labels=scales::dollar)
+ggplot(countyear, aes(x=year, y=mean, colour=county))+geom_line()+scale_y_continuous(labels=scales::dollar_format(prefix="€" ))
 #+END_SRC
 
 #+RESULTS:
@@ -678,19 +697,27 @@ blocks and groups of houses. These probably shouldn't be looked at for this anal
 Looking closer at Dublin (and breaking down by postal code), we can see some more interesting patterns. 
 
 #+BEGIN_SRC R :session  :results output graphics :file dubmonthly.png :exports results
-filter(prop_df, county=="Dublin", price<1e6, county==str_match(county, "^Dublin")) %>% ggplot( aes(x=date_of_sale, y=price))+geom_point()+facet_wrap(~postal_code)+geom_smooth()
+filter(prop_df, county=="Dublin", price<1e6, 
+county==str_match(county, "^Dublin")) %>%
+    ggplot( aes(x=date_of_sale, y=price))+
+    geom_point()+
+    facet_wrap(~postal_code)+
+    geom_smooth()
 #+END_SRC
 
 #+RESULTS:
 [[file:dubmonthly.png]]
-- Prices are definitely trending up, but there are some large outliers across the board.
+- Prices are definitely trending up, but there are some large outliers
+  across the board.
 
-Like this former house owned by an executive in [[https://www.irishtimes.com/life-and-style/homes-and-property/new-to-market/where-the-gardens-sweep-down-to-the-liffey-1.2650733][Dublin 20, for example]]. That place definitely
-doesn't reflect the average experience in that area. In general, I'm beginning to think that
-there are multiple housing markets in Ireland, not one. This makes sense as one can only
-compete against others in the same price range. This would suggest that I should regard the
-house buying denizens of South Dublin to be some kind of alien species. I always enjoy
-when a data-driven theory agrees with my priors. 
+Like this former house owned by an executive in [[https://www.irishtimes.com/life-and-style/homes-and-property/new-to-market/where-the-gardens-sweep-down-to-the-liffey-1.2650733][Dublin 20, for
+example]]. That place definitely doesn't reflect the average experience
+in that area. In general, I'm beginning to think that there are
+multiple housing markets in Ireland, not one. This makes sense as one
+can only compete against others in the same price range. This would
+suggest that I should regard the house buying denizens of South Dublin
+to be some kind of alien species. I do enjoy when a data-driven theory
+agrees with my priors.
 
 
 #+BEGIN_SRC R  :session  :results output graphics :file dubsalesdaily.png :exports results
@@ -701,59 +728,103 @@ ggplot(avbyday, aes(x=date_of_sale, y=sales))+geom_line()+facet_wrap(~postal_cod
 #+RESULTS:
 [[file:dubsalesdaily.png]]
 - Long periods of not much activity, followed by sudden spikes.
-- We should probably dig into some of the spikes to figure out what they mean.
-- It's possible that they may be one overall transaction recorded as multiples (for instance, when an entire apartment block is sold to one developer, and it's recorded unit by unit). 
+- We should probably dig into some of the spikes to figure out what
+  they mean.
+- It's possible that they may be one overall transaction recorded as
+  multiples (for instance, when an entire apartment block is sold to
+  one developer, and it's recorded unit by unit).
 
 
-*** Mortgage Data
+** Mortgage Data
 
-Most people who buy houses need mortgages, unfortunately. Fortuntately for me, we have a (reasonably good) source of information in this on the <INSERT_ORG_HERE> website.
+Most people who buy houses need mortgages, unfortunately. Fortuntately
+for me, we have a (reasonably good) source of information in this on
+the <INSERT_ORG_HERE> website.
 
-The data goes back to 2011 (so not quite as much as our house price data), and is collected
-at a monthly cadence. It appears to be most of the high-st banks in ireland, and is only for
-mortgages on residential properties.
+The data goes back to 2011 (so not quite as much as our house price
+data), and is collected at a monthly cadence. It appears to be most of
+the high-street banks in ireland, and is only for mortgages on residential
+properties.
 
-It comes in an Excel sheet. Whoever released this seemed to value the aesthetic principles of the dataset in preference to usability in computer programs. Given that the primary audience seems to be journalists, this probably makes sense. 
+It comes in an Excel sheet. Whoever released this seemed to value the
+aesthetic principles of the dataset in preference to usability in
+computer programs. Given that the primary audience seems to be
+journalists, this probably makes sense.
 
-I did some artisanal data cleaning [fn:14] on the file, and imported all the data as per below. 
+I did some artisanal data cleaning [fn:14] on the file, and imported
+all the data as per below.
 
 #+BEGIN_SRC R :session :results none :exports code
 require(readxl)
 mortgage_sheets <- excel_sheets("Website-mortgage-approvals-time-series-Sep2018.xls")
-volumes <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls", sheet="Volumes", skip=4)
+volumes <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls",
+                      sheet="Volumes", skip=4)
 names(volumes)[c(1:2, 8)] <- c("year", "month", "total")
 volumes2 <- normalise_names(volumes)
 
-values <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls", sheet="Values", skip=4)
+values <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls",
+                     sheet="Values", skip=4)
 names(values)[c(1:2, 8)] <- c("year", "month", "total")
 values2 <- normalise_names(values)
 
-av_values <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls", sheet="Average Value", skip=4)
+av_values <- read_excel("Website-mortgage-approvals-time-series-Sep2018.xls",
+                        sheet="Average Value", skip=4)
 names(av_values)[c(1:2, 8)] <- c("year", "month", "total")
 av_values2 <- normalise_names(av_values)
+valtidy <- gather(values2, key="type", value="value", 3:7) %>%
+    mutate(date=lubridate::ymd(paste(
+                               year, month, "01",
+                               sep="-_")))
+voltidy <- gather(volumes, key="type", value="volume", 3:7) %>%
+    mutate(date=lubridate::ymd(paste(
+                               year, month, "01",
+                               sep="-_")))
+av_valtidy <- gather(av_values2, key="type", value="av_value", 3:7) %>%
+    mutate(date=lubridate::ymd(paste(
+                               year, month, "01",
+                               sep="-_")))
 #+END_SRC
 
 
-Note the repeated code. Sometimes, a little copying is better than a large dependency. Sometimes people are lazy. Who can ever tell, in this workaday world? 
+Note the repeated code. Sometimes, a little copying is better than a
+large dependency. Sometimes people are lazy. Who can ever tell, in
+this workaday world?
 
-The volumes tab is count, the values tab is in millions (1e6), and the average values tab is (presumably) the first divided by the second. There's also a notes tab, which we don't import [fn:15]
+The volumes tab is count, the values tab is in millions (1e6), and the
+average values tab is (presumably) the first divided by the second.
+There's also a notes tab, which we don't import [fn:15]
 
 So, below we can see the volumes of mortgage approvals since 2011. 
 
 #+BEGIN_SRC R :session  :results output graphics :file mortgagecount.png :exports results
-filter(volstidy2, type!="total") %>% ggplot( aes(x=dates, y=count, colour=type))+geom_line()+geom_smooth()
+ggplot(voltidy,
+       aes(x=date, y=volume,
+           colour=type))+
+    geom_line()+
+    geom_smooth()
 #+END_SRC
 
 #+RESULTS:
-[[file:mortgagecount.png]]
-The most striking thing about this graph is the complete absence of first-time buyers between 2011 and 2014. I am tempted to declare it a data mistake, but given the economic conditions it is a little plausible. They may also suppress small numbers in the interests of privacy. It would be good if I figured this out, but I'll leave it for now. 
+[[file:mortgagecount.png]] [[file:mortgagecount.png]] The most striking thing
+about this graph is the complete absence of first-time buyers between
+2011 and 2014. I am tempted to declare it a data mistake, but given
+the economic conditions it is a little plausible. They may also
+suppress small numbers in the interests of privacy. It would be good
+if I figured this out, but I'll leave it for now.
 
-When they do come back, they come back all at once, with near level FTB and traders-up. If this pattern held for the entirity of the boom, no wonder that things have gotten so messed up since. 
+When they do come back, they come back all at once, with near level
+FTB and traders-up. If this pattern held for the entirity of the boom,
+no wonder that things have gotten so messed up since.
 
-Next, we look at the total value of mortgages issued to particular kinds of buyers over the time period. 
+Next, we look at the total value of mortgages issued to particular
+kinds of buyers over the time period.
 
 #+BEGIN_SRC R :session  :results output graphics :file mortgagevols.png :exports results
-filter(valstidy2, type!="total") %>% ggplot( aes(x=dates, y=count*1.e6, colour=type))+geom_line()+geom_smooth()+ylab("total issue value ")+scale_y_continuous(labels=scales::dollar)
+ggplot(valtidy, aes(x=dates, y=count*1.e6, colour=type))+
+    geom_line()+
+    geom_smooth()+
+    ylab("total issue value ")+ 
+    scale_y_continuous(labels=scales::dollar_format(prefix="€" ))
 #+END_SRC
 
 #+RESULTS:
@@ -766,7 +837,11 @@ We can see what the average looks like in the plot below.
 
 
 #+BEGIN_SRC R :session  :results output graphics :file mortgage_av_vals.png :exports results
-filter(av_valstidy2, type!="total") %>% ggplot( aes(x=dates, y=count, colour=type))+geom_line()+geom_smooth()+ylab("average issue value ")+scale_y_continuous(labels=scales::dollar)
+ggplot(av_valtidy, aes(x=date, y=av_value, colour=type))+
+    geom_line()+
+    geom_smooth()+
+    ylab("average issue value ")+
+    scale_y_continuous(labels=scales::dollar_format(prefix="€" ))
 #+END_SRC
 
 #+RESULTS:
@@ -795,9 +870,9 @@ to the mortgage data eventually [fn:16]).
 
 Next stop, the CSO!
 
-*** Residential Prices by Month, Type of Property (HPM06)
+** Residential Prices by Month, Type of Property (HPM06)
 
-The CSO have this arcance windows only application that people 
+The CSO have this arcane windows only application that people 
 are supposed to use to get data. Being on Linux, I was SOL until
 some kind soul wrote code to access their database through an API.
 
@@ -845,7 +920,9 @@ filter(prices3, type_of_residential_property=="National - all residential proper
 #+END_SRC
 
 #+RESULTS:
-[[file:prices200518.png]] Wow, so overall we're in 2005 again. I remember
+[[file:prices200518.png]] 
+
+Wow, so overall we're in 2005 again. I remember
 telling people not to buy houses around then. 
 Mind you I was just bitter because no-one would give me 
 a mortgage [fn:17]. 
@@ -854,7 +931,7 @@ This kinda scares the hell out of me, but I suspect that
 the numbers of houses being sold today are a fraction of those
 sold during the boom. 
 
-**** TODO Figure out how to get some data on house prices sales during the boom. :noexport:
+*** TODO Figure out how to get some data on house prices sales during the boom. :noexport:
 
 
 Next, we can break this down by county/region. 
@@ -894,7 +971,7 @@ This makes it very difficult to accurately estimate any trend. However,
 we can get new property prices by year and major area from the department of housing. 
 While this isn't perfect, it's better than nothing.
 
-*** New Property Prices 
+** New Property Prices 
 
 #+BEGIN_SRC R :session :results none :exports none
 newprices <- read_csv("yearly_property_prices.csv", skip=1, na="n/a")
@@ -905,11 +982,16 @@ newprices3 <- gather(newprices2, key="area", value="price", 2:8)
 
 
 #+BEGIN_SRC R :session :results output graphics :file yearlyprices.png :exports results
-ggplot(newprices3, aes(x=year, y=as.numeric(price), colour=area))+geom_line()+scale_y_continuous(labels=scales::dollar)+facet_wrap(~area)
+ggplot(newprices3, aes(x=year, y=as.numeric(price), colour=area))+
+    geom_line()+
+    scale_y_continuous(labels=scales::dollar_format(prefix="€" ))+
+    facet_wrap(~area)+ylab("price")
 #+END_SRC
 
 #+RESULTS:
 [[file:yearlyprices.png]]
+
+
 Wow, this is mental. House prices have basically only gone down a lot once,
 and that was the boom. This may be why many Irish people regard property as 
 such a good asset. Additionally, we're now seeing ZIRP and QE inject large sums
@@ -922,6 +1004,40 @@ I probably need to get some counts to normalise.
 Additionally, I need to look at population flows over the time periods concerned.
 If I had counts for houses built and available, that would be super useful.
 Not sure if such a source exists, however. 
+
+** Pulling it All Together
+
+- So what have we learned from today's excursions? 
+
+Firstly, we reviewed the change in property prices by county and date of sale
+from the PPR. This source is entirely comprehensive, but only covers sales,
+so we can't figure out demand from this, except by looking at price.
+Additionally, the address data is pretty raw, and it would take a whole 
+lot of time or cost a whole bunch of money [fn:19] to make it more usable.
+
+If that could be done, the CSO have a lot of good area data which I barely
+scratch the surface of here. The most obvious next avenue of approach is
+through population statistics and change rates, and this would be expected
+to impact demand for housing. 
+
+You could then normalise the data by the population and get more useful 
+estimates. 
+
+However, another issue which we're ingoring is rents, as a lot of property 
+is not available to be sold. This is becoming increasingly common, especially
+in Dublin. I believe that a bunch of the really large transactions in the PPR
+are the result of such arrangements. We can get rents from various websites, 
+in compliance with all legal processes :) 
+
+Finally, we need to measure the delta between asking and sale prices. Again,
+this can be obtained through various web-scraping means and sources. This
+delta will then allow us to make somewhat (more) useful decisions with respect to 
+property [fn:20]
+
+So, that's what I'm going to do, I guess. To be fair, this post is probably
+more like 2-3 articles, but I can't handle not being finished anymore, so 
+I'm calling it done. 
+
 
 *** CountyLists :noexport:
 
