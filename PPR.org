@@ -1,4 +1,4 @@
-q#+TITLE: Property Analysis
+#+TITLE: Property Analysis
 #+HTML_HEAD: <style type="text/css">.example {background-color: #eff0f1; color: #ff0000;}</style>
 #+OPTIONS: toc:nil
 #+OPTIONS: ^:nil
@@ -515,6 +515,8 @@ normalise_names <- function(df) {
 }
 #+END_SRC
 
+#+RESULTS:
+
 
 This function does a few things:
 1) it replaces spaces or punctuation with underscores[fn:22]
@@ -546,7 +548,7 @@ have become hopelessly mangled). Again, we abuse iconv, this time on
 a particular column. My life would be much easier if I took the time
 to learn how to handle encodings [fn:7]
 
-#+BEGIN_SRC R :session *R* :exports code
+#+BEGIN_SRC R :exports code
 fix_price <- function(x) {
     nopunct <- gsub(",|\\.", "", x=x)
     nums <- iconv(nopunct, "latin1", "ASCII", sub="")
@@ -555,7 +557,6 @@ dat2$price <- with(dat2, fix_price(price))
 #+END_SRC
 
 #+RESULTS:
-: TRUE
 
 
 - For some bizzare reason, price is in cent. We handle that here to avoid wasting time. 
@@ -1346,4 +1347,94 @@ library(rstan)
 schools_fit <- stan(file="schools.stan",
                     data=c("J", "y", "sigma"),
                     iter=2000, chains=4)
+#+END_SRC
+* Property, Geocoded
+
+- Shane Lynn did this before.
+
+- We can read in his data and get a big head start
+
+- only covers 2012-17
+
+- but has latitude and longitude, and shapefiles, which will help a lot. 
+
+#+BEGIN_SRC R :results none :exports code :eval maybe
+require(sp)
+require(rgdal)
+require(tidyverse)
+ppr_gc <- read_csv("ppr_data_encoded.csv")
+ppr_gc_smaller <- select(ppr_gc, year, input_string, sale_date, price, ppr_county, geo_county, description_of_property, 15:24) %>% filter(price<1e6)
+ppr_gc2 <- filter(ppr_gc_smaller, !is.na(latitude), !is.na(electoral_district))
+locs <- select(ppr_gc2, longitude, latitude)
+sp_ppr <- SpatialPointsDataFrame(locs, data=ppr_gc2, proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+shp <- readOGR("electoral_divisions_gps.shp")
+dublin_counties <- c("Fingal", "Dn Laoghaire-Rathdown", "Dublin City", 
+                     "South Dublin", "Kildare County", "Wicklow County")
+subset <- shp[as.character(shp@data$COUNTYNAME) %in% 
+                dublin_counties, ]
+mapdata <- fortify(subset)
+
+dubcity <- filter(ppr_gc2, geo_county %in% dublin_counties)
+dubcity_samp <- sample_frac(dubcity, size=0.3)
+
+
+#+END_SRC
+
+Lets start at the beginning again, and not assume that the data is
+perfectly similar to the old one. 
+#+BEGIN_SRC R :session :colnames yes
+names(ppr_gc)
+#+END_SRC
+
+#+RESULTS:
+| x                         |
+|---------------------------|
+| X1                        |
+| year                      |
+| input_string              |
+| sale_date                 |
+| address                   |
+| postal_code               |
+| ppr_county                |
+| price                     |
+| not_full_market_price     |
+| vat_exclusive             |
+| description_of_property   |
+| property_size_description |
+| date                      |
+| formatted_address         |
+| accuracy                  |
+| latitude                  |
+| longitude                 |
+| postcode                  |
+| type                      |
+| geo_county                |
+| electoral_district        |
+| electoral_district_id     |
+| region                    |
+| small_area                |
+
+The last twelve columns are new, and will definitely facilitate more granular analysis. 
+We need to look at what date ranges this data covers
+#+BEGIN_SRC R :colnames yes
+ppr_gc %>% summarise(max=max(sale_date), min=min(sale_date))
+#+END_SRC
+
+#+RESULTS:
+| max        | min        |
+|------------+------------|
+| 31/12/2016 | 01/01/2012 |
+
+So it covers five years worth of data, and cuts off at end 2016.
+Checking our previous dataset, we realise that there are about
+94K sales since then. Assuming a limit of 2k calls per day,
+we could do this in 47 days using Google's services. 
+To be fair, that's not the end of the world, especially as 
+it would be pretty simple to keep it updates afterwards. 
+
+#+BEGIN_SRC R :exports code :eval no
+stan_elec_dub <- stan_lmer(log(price)~region+
+                               (postcode|year)+
+                               (elec_dist|postcode),
+                           data=dubcity_samp2)
 #+END_SRC
