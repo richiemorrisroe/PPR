@@ -1432,9 +1432,355 @@ we could do this in 47 days using Google's services.
 To be fair, that's not the end of the world, especially as 
 it would be pretty simple to keep it updates afterwards. 
 
+
+#+BEGIN_SRC R :exports code :results none
+require(sf)
+subset_sf <- st_as_sf(subset)
+subset_sf2 <- mutate(subset_sf, PROP_UNOCC=UNOCC2011/HS2011, PROP_MALE=MALE2011/TOTAL2011, PROP_FEMALE=FEMALE2011/TOTAL2011, PER_PER_AREA=TOTAL2011/LAND_AREA, PEOPLE_PER_HS=TOTAL2011/HS2011)
+#+END_SRC
+
+
+
+If we convert the data to an *sf* object, we can examine patterns
+by small area. 
+
+#+BEGIN_SRC R :results output graphics :file unocc2011.png :exports both
+plot(subset_sf2["PROP_UNOCC"])
+#+END_SRC
+
+#+RESULTS:
+[[file:unocc2011.png]]
+
+Not sure that makes a lot of sense, given that 
+the areas close to the centre have way too many unoccupied dwellings. 
+
+#+BEGIN_SRC R :results output graphics :file prop_male.png :exports results
+plot(subset_sf2["PROP_MALE"])
+#+END_SRC
+
+#+RESULTS:
+[[file:prop_male.png]]
+
+For those seeking men. 
+
+
+#+BEGIN_SRC R :results output graphics :file prop_female.png :exports results
+plot(subset_sf2["PROP_FEMALE"])
+#+END_SRC
+
+#+RESULTS:
+[[file:prop_female.png]]
+
+
+At least I've written down how to use *sf* [fn:25]
+
+Next step is to re-do the Googly dance to get dublin maps with features
+
+This will make any further plots much more readable. 
+
+#+BEGIN_SRC R :exports code :results none
+require(ggmap)
+key <- scan("key.txt", what="character")
+register_google(key=key)
+dubmap <- get_map("Dublin, Ireland", zoom=11)
+#+END_SRC
+
 #+BEGIN_SRC R :exports code :eval no
 stan_elec_dub <- stan_lmer(log(price)~region+
                                (postcode|year)+
                                (elec_dist|postcode),
                            data=dubcity_samp2)
 #+END_SRC
+
+#+BEGIN_SRC python :tangle geocode_shane_lynn.py
+"""
+Python script for batch geocoding of addresses using the Google Geocoding API.
+This script allows for massive lists of addresses to be geocoded for free by pausing when the 
+geocoder hits the free rate limit set by Google (2500 per day).  If you have an API key for paid
+geocoding from Google, set it in the API key section.
+Addresses for geocoding can be specified in a list of strings "addresses". In this script, addresses
+come from a csv file with a column "Address". Adjust the code to your own requirements as needed.
+After every 500 successul geocode operations, a temporary file with results is recorded in case of 
+script failure / loss of connection later.
+Addresses and data are held in memory, so this script may need to be adjusted to process files line
+by line if you are processing millions of entries.
+Shane Lynn
+5th November 2016
+"""
+
+import pandas as pd
+import requests
+import logging
+import time
+
+logger = logging.getLogger("root")
+logger.setLevel(logging.DEBUG)
+# create console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+logger.addHandler(ch)
+
+#------------------ CONFIGURATION -------------------------------
+
+# Set your Google API key here. 
+# Even if using the free 2500 queries a day, its worth getting an API key since the rate limit is 50 / second.
+# With API_KEY = None, you will run into a 2 second delay every 10 requests or so.
+# With a "Google Maps Geocoding API" key from https://console.developers.google.com/apis/, 
+# the daily limit will be 2500, but at a much faster rate.
+# Example: API_KEY = 'AIzaSyC9azed9tLdjpZNjg2_kVePWvMIBq154eA'
+API_KEY = 'AIzaSyDqYnbecCHgRjpXZkVan1DQT9eXn_Fw56Q'
+# Backoff time sets how many minutes to wait between google pings when your API limit is hit
+BACKOFF_TIME = 30
+# Set your output file name here.
+output_filename = 'output_full2.csv'
+# Set your input file here
+input_filename = 'prop2017-18.csv'
+# Specify the column name in your input data that contains addresses here
+address_column_name = "address"
+# Return Full Google Results? If True, full JSON results from Google are included in output
+RETURN_FULL_RESULTS = True
+
+#------------------ DATA LOADING --------------------------------
+
+# Read the data to a Pandas Dataframe
+data = pd.read_csv(input_filename, encoding='utf8')
+
+if address_column_name not in data.columns:
+	raise ValueError("Missing Address column in input data")
+
+# Form a list of addresses for geocoding:
+# Make a big list of all of the addresses to be processed.
+addresses = data[address_column_name].tolist()
+
+# **** DEMO DATA / IRELAND SPECIFIC! ****
+# We know that these addresses are in Ireland, and there's a column for county, so add this for accuracy. 
+# (remove this line / alter for your own dataset)
+addresses = (data[address_column_name] + ',' + data['county'] + ',Ireland').tolist()
+
+
+#------------------	FUNCTION DEFINITIONS ------------------------
+
+def get_google_results(address, api_key=None, return_full_response=False):
+    """
+    Get geocode results from Google Maps Geocoding API.
+    
+    Note, that in the case of multiple google geocode reuslts, this function returns details of the FIRST result.
+    
+    @param address: String address as accurate as possible. For Example "18 Grafton Street, Dublin, Ireland"
+    @param api_key: String API key if present from google. 
+                    If supplied, requests will use your allowance from the Google API. If not, you
+                    will be limited to the free usage of 2500 requests per day.
+    @param return_full_response: Boolean to indicate if you'd like to return the full response from google. This
+                    is useful if you'd like additional location details for storage or parsing later.
+    """
+    # Set up your Geocoding url
+    geocode_url = "https://maps.googleapis.com/maps/api/geocode/json?address={}".format(address)
+    if api_key is not None:
+        geocode_url = geocode_url + "&key={}".format(api_key)
+        
+    # Ping google for the reuslts:
+    results = requests.get(geocode_url)
+    # Results will be in JSON format - convert to dict using requests functionality
+    results = results.json()
+    
+    # if there's no results or an error, return empty results.
+    if len(results['results']) == 0:
+        output = {
+            "formatted_address" : None,
+            "latitude": None,
+            "longitude": None,
+            "accuracy": None,
+            "google_place_id": None,
+            "type": None,
+            "postcode": None
+        }
+    else:    
+        answer = results['results'][0]
+        output = {
+            "formatted_address" : answer.get('formatted_address'),
+            "latitude": answer.get('geometry').get('location').get('lat'),
+            "longitude": answer.get('geometry').get('location').get('lng'),
+            "accuracy": answer.get('geometry').get('location_type'),
+            "google_place_id": answer.get("place_id"),
+            "type": ",".join(answer.get('types')),
+            "postcode": ",".join([x['long_name'] for x in answer.get('address_components') 
+                                  if 'postal_code' in x.get('types')])
+        }
+        
+    # Append some other details:    
+    output['input_string'] = address
+    output['number_of_results'] = len(results['results'])
+    output['status'] = results.get('status')
+    if return_full_response is True:
+        output['response'] = results
+    
+    return output
+
+#------------------ PROCESSING LOOP -----------------------------
+
+# Ensure, before we start, that the API key is ok/valid, and internet access is ok
+test_result = get_google_results("London, England", API_KEY, RETURN_FULL_RESULTS)
+if (test_result['status'] != 'OK') or (test_result['formatted_address'] != 'London, UK'):
+    logger.warning("There was an error when testing the Google Geocoder.")
+    raise ConnectionError('Problem with test results from Google Geocode - check your API key and internet connection.')
+
+# Create a list to hold results
+results = []
+# Go through each address in turn
+for address in addresses:
+    # While the address geocoding is not finished:
+    geocoded = False
+    while geocoded is not True:
+        # Geocode the address with google
+        try:
+            geocode_result = get_google_results(address, API_KEY, return_full_response=RETURN_FULL_RESULTS)
+        except Exception as e:
+            logger.exception(e)
+            logger.error("Major error with {}".format(address))
+            logger.error("Skipping!")
+            geocoded = True
+            
+        # If we're over the API limit, backoff for a while and try again later.
+        if geocode_result['status'] == 'OVER_QUERY_LIMIT':
+            logger.info("Hit Query Limit! Backing off for a bit.")
+            time.sleep(BACKOFF_TIME * 60) # sleep for 30 minutes
+            geocoded = False
+        else:
+            # If we're ok with API use, save the results
+            # Note that the results might be empty / non-ok - log this
+            if geocode_result['status'] != 'OK':
+                logger.warning("Error geocoding {}: {}".format(address, geocode_result['status']))
+            logger.debug("Geocoded: {}: {}".format(address, geocode_result['status']))
+            results.append(geocode_result)           
+            geocoded = True
+
+    # Print status every 100 addresses
+    if len(results) % 100 == 0:
+    	logger.info("Completed {} of {} address".format(len(results), len(addresses)))
+            
+    # Every 500 addresses, save progress to file(in case of a failure so you have something!)
+    if len(results) % 500 == 0:
+        pd.DataFrame(results).to_csv("{}_bak".format(output_filename))
+        print("saved {r} results to file".format(r=len(results)))
+    if len(results) % 10000 == 0:
+            pd.DataFrame(results).to_csv(output_filename, encoding='utf8')
+            break
+# All done
+logger.info("Finished geocoding all addresses")
+# Write the full results to csv using the pandas library.
+pd.DataFrame(results).to_csv(output_filename, encoding='utf8')
+#+END_SRC
+
+
+#+BEGIN_SRC python :session :tangle misc.py
+def list_files(path, pattern):
+    import os
+    """A wrapper around os.listdir() which filters
+    the output based on pattern. Returns a list"""
+    return [x for x in os.listdir(path) if pattern in x]
+#+END_SRC
+
+#+RESULTS:
+| yearlyprices.png | stan_dub_lm1.rds | ppcheck1.png | prices_county200518.png | PPR.org~ | dublin5.png | output_full2.csv | res.txt | PPR.pdf | prop_undone.csv | PPR-2010.csv | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.shp | prop_test.csv | schools.stan | Website-mortgage-approvals-time-series-Sep2018.xls | stanlm1pl1.png | PPR.Rnw~ | PPR.Rnw | electoral_divisions_gps.shp | electoral_divisions_gps.prj | fitresid1.png | output_test2.csv | __MACOSX | dubsalesdaily.png | small_areas_gps.qpj | train_sample2.csv | electoral-divisions-gps-projection.zip | PPR-2013.csv | small_areas_gps.dbf | stanlm3.rds | PPR-ALL.xlsx | PPR.html | PPR-2011.csv | small_areas_gps.prj | rcso | PPR-2012.csv | .~lock.Website-mortgage-approvals-time-series-Sep2018.xls# | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.shp | .git | ppr_data_encoded.csv | stanmodels1711.rda | PPR-plots.pdf | PPR.aux | meanyearly.png | geckodriver.log | mortgagevols.png | PPR-2017.csv | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.zip | .~lock.PPRAll2.csv# | PPR.org | PPR-addresses.csv | county2.png | small_areas_gps.shx | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.dbf | prices200518.png | small_areas_gps.shp | sex_age_pop_census_ed_2016.csv | gc_results.csv | geocoding-output-2012-2017.zip | PPRAll2.csv | train_sample.csv | PPR-2015.csv | ppr_data_encoded.csv.zip | .~lock.central_bank_mortgage_arrears_data.xlsx# | PPR.tex | mortgage_av_vals.png | .~lock.sex_age_pop_census_ed_2016.csv# | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.shx | output_full2.csv_bak | dubmonthly.png | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.zip | county1.png | central_bank_mortgage_arrears_data.xlsx | hist1.png | pricedens.png | schools.csv | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.shx | sample.csv | stanlm.rds | .~lock.yearly_property_prices.csv# | electoral_divisions_gps.qpj | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.prj | yearly_property_prices.csv | PPR-2014.csv | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.cpg | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.dbf | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.prj | geocode.py | output_test.csv | county3.png | .~lock.PPR-addresses.csv# | geocode_shane_lynn.py | Constituency_Boundaries__Generalised_20m__OSi_National_Statuatory_Boundaries_.cpg | stanlm4.rds | #PPR.Rnw# | output_full.csv_bak | dublin1.png | yearly.png | richitets.txt | .Rhistory | prop2017-18.csv | dub_areas.png | small-areas-gps-projection.zip | electoral_divisions_gps.dbf | dublin2.png | electoral_divisions_gps.shx | PPR-2016.csv | mortgagecount.png | stanlm_dub.rds | Small_Areas_Generalised_20m__OSi_National_Statistical_Boundaries.xml | PPR.log | auto | README.org | PPR.out | stanmods201118.rda | dublin3.png | dublin6.png | mortgagevals.png | PPR.toc | stanlm2.rds | countyearly.png |
+
+The above is a simple wrapper around os.listdir() which 
+returns results matching a pattern.
+I like the use of a list comp here, its nice
+The in operator is particularly useful. 
+
+I can just hash the addresses to not return previously
+processed results. 
+
+but i could also use locality-sensitive hashes, which are pretty 
+rocking for approximate matching.
+
+The package *datasketch* has an implementation,
+and I provide example code below. 
+
+#+BEGIN_SRC python :session
+from datasketch import MinHash, MinHashLSH
+
+set1 = set(['minhash', 'is', 'a', 'probabilistic', 'data', 'structure', 'for',
+            'estimating', 'the', 'similarity', 'between', 'datasets'])
+set2 = set(['minhash', 'is', 'a', 'probability', 'data', 'structure', 'for',
+            'estimating', 'the', 'similarity', 'between', 'documents'])
+set3 = set(['minhash', 'is', 'probability', 'data', 'structure', 'for',
+            'estimating', 'the', 'similarity', 'between', 'documents'])
+
+m1 = MinHash(num_perm=128)
+m2 = MinHash(num_perm=128)
+m3 = MinHash(num_perm=128)
+for d in set1:
+    m1.update(d.encode('utf8'))
+for d in set2:
+    m2.update(d.encode('utf8'))
+for d in set3:
+    m3.update(d.encode('utf8'))
+
+# Create LSH index
+lsh = MinHashLSH(threshold=0.9)
+lsh.insert("m2", m2)
+lsh.insert("m3", m3)
+result = lsh.query(m1)
+print("Approximate neighbours with Jaccard similarity > 0.5", result)
+#+END_SRC
+
+
+#+BEGIN_SRC python :session
+import pandas as pd
+from datasketch import MinHash, MinHashLSH
+results = pd.read_csv("output_full2.csv_bak")
+firstadd = results.formatted_address.head()
+def address_to_set(address):
+    """Takes an address a converts it to a set of words,
+    space separated and lower-cased"""
+    lowered = address.lower()
+    splitted = lowered.split("\s+")
+    set_split = set(splitted)
+    return set_split
+
+def create_minhash(address_set):
+    """Takes the output of address_to_set and inserts
+    each word into a minhash, returning this minhash"""
+    m1 = MinHash()
+    for word in address_set:
+        m1.update(word.encode('utf8'))
+    return m1
+
+def add_to_minhash_set(minhashes, threshold=0.9):
+    """Takes an dict of address, minihash pairs, and adds them
+    to a new MinHashLSH object, which is returned"""
+    lsh = MinHashLSH(threshold)
+    for name, minhash in minhashes.items():
+        lsh.insert(name, minhash)
+    return lsh
+
+def query_from_minhash_set(text, lsh):
+    add_dict = {add : create_minhash(address_to_set(add))
+                for add in text}
+    results = []
+    for name, hash in add_dict.items():
+        results.append((name, lsh.query(hash)))
+    return results
+
+firstadd = results.formatted_address.head()
+oneadd= firstadd[0]
+s1 = address_to_set(oneadd)
+mh1 = create_minhash(s1)
+addresses = results.formatted_address.fillna('')
+allmh1 = [create_minhash(address_to_set(address)) for address in addresses]
+firstadd_set = {add : create_minhash(address_to_set(add)) for add in firstadd}
+set_test = add_to_minhash_set(firstadd_set)
+
+alladd_set =  {add : create_minhash(address_to_set(add)) for add in addresses}
+alladd_lsh = add_to_minhash_set(alladd_set)
+q_test = query_from_minhash_set(firstadd, alladd_lsh_loose)
+q_test2 = query_from_minhash_set(firstadd, alladd_lsh)
+#+END_SRC
+
+
+So I have an (apparently) working implementation.
+It actually doesn't seem that useful though, as it merely
+returns exact results.
+To be fair, if I feed it more addresses it will probably do better
+but it doesn't look like this will be particularly useful.
