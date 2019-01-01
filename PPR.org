@@ -208,9 +208,10 @@ locs <- select(ppr_gc2, longitude, latitude)
 sp_ppr <- SpatialPointsDataFrame(locs, data=ppr_gc2, proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
 shp <- readOGR("electoral_divisions_gps.shp")
 dublin_counties <- c("Fingal", "Dn Laoghaire-Rathdown", "Dublin City", 
-                     "South Dublin", "Kildare County", "Wicklow County")
+                     "South Dublin")
 subset <- shp[as.character(shp@data$COUNTYNAME) %in% 
-                dublin_counties, ]
+              dublin_counties, ]
+dubcity <- shp[as.character(shp@data$COUNTYNAME)=="Dublin City",]
 mapdata <- fortify(subset)
 
 dubcity <- filter(ppr_gc2, geo_county %in% dublin_counties)
@@ -474,7 +475,7 @@ is an important career skill.
 Anyways, so the first thing we do is look at the data
 
 #+BEGIN_SRC R :session *R* :exports both
-dat <- read_excel("PPR-ALL.xlsx", sheet="PPR-ALL")
+dat <- readxl::read_excel("PPR-ALL.xlsx", sheet="PPR-ALL")
 names(dat)
 #+END_SRC
 
@@ -548,7 +549,7 @@ have become hopelessly mangled). Again, we abuse iconv, this time on
 a particular column. My life would be much easier if I took the time
 to learn how to handle encodings [fn:7]
 
-#+BEGIN_SRC R :exports code
+#+BEGIN_SRC R :exports code :results none
 fix_price <- function(x) {
     nopunct <- gsub(",|\\.", "", x=x)
     nums <- iconv(nopunct, "latin1", "ASCII", sub="")
@@ -556,7 +557,7 @@ fix_price <- function(x) {
 dat2$price <- with(dat2, fix_price(price))
 #+END_SRC
 
-#+RESULTS:
+
 
 
 - For some bizzare reason, price is in cent. We handle that here to avoid wasting time. 
@@ -1137,6 +1138,8 @@ guess
 
 [fn:1] In fact, it was done via banks, but it doesn't really have the same ring to it now, does it? 
 
+[fn:25] In fact, I already did this, but compleetely forgot to write anything down
+
 * Bayesian models, yo!
 
 - Step one: take a ten percent sample
@@ -1348,7 +1351,7 @@ schools_fit <- stan(file="schools.stan",
                     data=c("J", "y", "sigma"),
                     iter=2000, chains=4)
 #+END_SRC
-* Property, Geocoded
+*  Property, Geocoded
 
 - Shane Lynn did this before.
 
