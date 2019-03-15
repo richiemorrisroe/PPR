@@ -233,13 +233,18 @@ stan_elec_dub <- stan_lmer(log(price)~region+
 -
 
 #+BEGIN_SRC R :session :results none :exports code :eval no
-ppr_df <- mutate(ppr_df, year=year(date_sale), month=month(date_sale))
-pprlm0 <- lm(price~property_size+county, data=ppr_df)
-pprlm1 <- lm(price~property_size+county+year, data=ppr_df)
-pprlm2 <- lm(price~property_size+county+(year)^2, data=ppr_df2)
-pprlm3 <- lm(price~property_size+county+poly(year, 2), data=ppr_df2)
-ppr_lmer <- lmer(price~property_size+county+(1|year), data=ppr_df2)
-ppr_lmer2 <- lmer(price~property_size+(1|county)+(1|year), data=ppr_df2)
+require(lme4)
+prop_size_num <- with(train_sample, gsub("[A-zA-z]+", "", x=property_size_description))
+prop2 <- gsub("\\s+", " ", x=prop_size_num)
+train_sample$property_size_description <- fct_explicit_na(prop2)
+pprlm0 <- lm(price~property_size_description+county, data=train_sample)
+pprlm1 <- lm(price~property_size_description+county+year, data=train_sample)
+pprlm2 <- lm(price~property_size_description+county+(year)^2, data=train_sample)
+pprlm3_log <- lm(log(price)~property_size_description+county+poly(year, 2), data=train_sample)
+ppr_lmer <- lmer(price~property_size_description+county+(1|year), data=train_sample)
+ppr_lmer2 <- lmer(price~property_size_description+(1|county)+(1|year), data=train_sample)
+ppr_lmer3 <- lmer(price~property_size_description+(county|year), data=train_sample)
+                      
 #+END_SRC
 
 #+BEGIN_SRC R :session :results none :exports none
@@ -1365,7 +1370,8 @@ schools_fit <- stan(file="schools.stan",
 require(sp)
 require(rgdal)
 require(tidyverse)
-ppr_gc <- read_csv("ppr_data_encoded.csv")
+ppr_gc <- read_csv("ppr_geocoded_till_oct2018.csv")
+
 ppr_gc_smaller <- select(ppr_gc, year, input_string, sale_date, price, ppr_county, geo_county, description_of_property, 15:24) %>% filter(price<1e6)
 ppr_gc2 <- filter(ppr_gc_smaller, !is.na(latitude), !is.na(electoral_district))
 locs <- select(ppr_gc2, longitude, latitude)
@@ -1373,8 +1379,10 @@ sp_ppr <- SpatialPointsDataFrame(locs, data=ppr_gc2, proj4string = CRS("+proj=lo
 shp <- readOGR("electoral_divisions_gps.shp")
 dublin_counties <- c("Fingal", "Dn Laoghaire-Rathdown", "Dublin City", 
                      "South Dublin", "Kildare County", "Wicklow County")
+dubcity <- "Dublin City"
 subset <- shp[as.character(shp@data$COUNTYNAME) %in% 
-                dublin_counties, ]
+              dublin_counties, ]
+subset2 <- shp[as.character(shp@data$COUNTYNAME)=="Dublin City",]
 mapdata <- fortify(subset)
 
 dubcity <- filter(ppr_gc2, geo_county %in% dublin_counties)
@@ -1424,9 +1432,9 @@ ppr_gc %>% summarise(max=max(sale_date), min=min(sale_date))
 #+END_SRC
 
 #+RESULTS:
-| max        | min        |
+|        max |        min |
 |------------+------------|
-| 31/12/2016 | 01/01/2012 |
+| 2018-10-12 | 2012-01-01 |
 
 So it covers five years worth of data, and cuts off at end 2016.
 Checking our previous dataset, we realise that there are about
@@ -1437,6 +1445,20 @@ it would be pretty simple to keep it updates afterwards.
 
 
 #+BEGIN_SRC R :exports code :results none
+tenure <- read_csv("housing_tenure.csv") %>% normalise_names()
+names(tenure) <- gsub("^_", "perc_", x=names(tenure))
+
+ppr_tenure_m <- merge(ppr_gc, tenure, by.x="small_area", by.y="geog_id", all.x=TRUE)
+ppr_tenure_less_1m <- filter(ppr_tenure_m, price<=1e6)
+ppr_tenure_more_1m <- filter(ppr_tenure_m, price>1e6)
+elec_price <- ppr_tenure_less_1m %>% group_by(electoral_district, electoral_district_id, year) %>% summarise(med_price=median(price), count=n())
+elec_m <- merge(subset2, elec_price, by.x="CSOED", by.y="electoral_district_id", duplicateGeoms=TRUE)
+elec_m_duball <- merge(subset, elec_price, by.x="CSOED", by.y="electoral_district_id", duplicateGeoms=TRUE)
+
+elec_m_sf <- st_as_sf(elec_m)
+elec_m_sf_duball <- st_as_sf(elec_m_duball)
+elec_m_tenure <- merge(elec_m_sf, tenure, by.x="CSOED", by.y="ed_ward_id")
+#this took more time than I expected. 
 require(sf)
 subset_sf <- st_as_sf(subset)
 subset_sf2 <- mutate(subset_sf, PROP_UNOCC=UNOCC2011/HS2011, PROP_MALE=MALE2011/TOTAL2011, PROP_FEMALE=FEMALE2011/TOTAL2011, PER_PER_AREA=TOTAL2011/LAND_AREA, PEOPLE_PER_HS=TOTAL2011/HS2011)
